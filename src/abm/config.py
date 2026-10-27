@@ -4,12 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from abm.products import ATTRIBUTES
+
 TRAITS: tuple[str, ...] = (
     "price_sensitivity",
     "health_orientation",
     "novelty_seeking",
     "habit_strength",
 )
+
+MISSIONS: tuple[str, ...] = ("weekly_shop", "top_up", "treat")
+
+# Utility terms a mission can scale: one per product attribute, plus habit.
+WEIGHT_TERMS: tuple[str, ...] = ATTRIBUTES + ("habit",)
 
 
 @dataclass(frozen=True)
@@ -26,11 +33,14 @@ class ArchetypeSpec:
         For each trait in ``TRAITS``, the ``(a, b)`` parameters of a Beta
         distribution. The mean is ``a / (a + b)``; larger ``a + b`` means
         less spread between people of the same archetype.
+    mission_probs : tuple of float
+        Weekly probability of each mission, ordered as ``MISSIONS``.
     """
 
     name: str
     share: float
     traits: dict[str, tuple[float, float]]
+    mission_probs: tuple[float, ...] = (0.6, 0.3, 0.1)
 
 
 def default_archetypes() -> tuple[ArchetypeSpec, ...]:
@@ -71,6 +81,7 @@ def default_archetypes() -> tuple[ArchetypeSpec, ...]:
                 "novelty_seeking": (5, 3),     # mean 0.63
                 "habit_strength": (3, 5),      # mean 0.38
             },
+            mission_probs=(0.4, 0.3, 0.3),     # treat occasions 3x more often
         ),
         ArchetypeSpec(
             "habitual",
@@ -83,6 +94,34 @@ def default_archetypes() -> tuple[ArchetypeSpec, ...]:
             },
         ),
     )
+
+
+def default_mission_weights() -> dict[str, dict[str, float]]:
+    """Return how each mission scales each utility term (assumed, not calibrated).
+
+    A weight of 1.0 means "as on a normal weekly shop"; 0.3 means the term
+    counts at 30% of its usual strength.
+
+    Returns
+    -------
+    dict
+        ``{mission: {term: weight}}`` for every mission in ``MISSIONS`` and
+        every term in ``WEIGHT_TERMS``.
+    """
+    return {
+        # Baseline: every term at full strength.
+        "weekly_shop": {t: 1.0 for t in WEIGHT_TERMS},
+        # Quick, low-effort trip: less browsing, more autopilot.
+        "top_up": {
+            "price": 1.0, "healthiness": 1.0, "novelty": 0.5,
+            "brand_strength": 1.2, "treat_score": 1.0, "habit": 1.5,
+        },
+        # Treat occasion: price matters much less (the JD's example).
+        "treat": {
+            "price": 0.3, "healthiness": 0.5, "novelty": 1.2,
+            "brand_strength": 1.0, "treat_score": 1.5, "habit": 0.8,
+        },
+    }
 
 
 @dataclass(frozen=True)
@@ -101,6 +140,8 @@ class SimConfig:
         Week in which the new product first appears on the shelf.
     archetypes : tuple of ArchetypeSpec
         Shopper types to sample from. Shares must sum to 1.
+    mission_weights : dict
+        ``{mission: {term: weight}}``, see ``default_mission_weights``.
     """
 
     n_agents: int = 500
@@ -108,6 +149,9 @@ class SimConfig:
     seed: int = 42
     launch_week: int = 4
     archetypes: tuple[ArchetypeSpec, ...] = field(default_factory=default_archetypes)
+    mission_weights: dict[str, dict[str, float]] = field(
+        default_factory=default_mission_weights
+    )
 
     def __post_init__(self) -> None:
         total = sum(a.share for a in self.archetypes)
@@ -116,3 +160,11 @@ class SimConfig:
         for a in self.archetypes:
             if set(a.traits) != set(TRAITS):
                 raise ValueError(f"Archetype {a.name!r} must define exactly {TRAITS}")
+            if len(a.mission_probs) != len(MISSIONS) or abs(sum(a.mission_probs) - 1) > 1e-9:
+                raise ValueError(f"Archetype {a.name!r} mission_probs must be "
+                                 f"{len(MISSIONS)} values summing to 1")
+        if set(self.mission_weights) != set(MISSIONS):
+            raise ValueError(f"mission_weights must define exactly {MISSIONS}")
+        for m, w in self.mission_weights.items():
+            if set(w) != set(WEIGHT_TERMS):
+                raise ValueError(f"Mission {m!r} must define exactly {WEIGHT_TERMS}")

@@ -15,3 +15,11 @@
 - **`np.random.default_rng(seed)`:** one generator passed explicitly to every function. That's reproducible and doesn't depend on global state. The legacy `np.random.seed` is global and easy to break.
 - **Interview Q:** *"How would you create synthetic shoppers that look like real ones?"*
   **A:** "Start from archetypes with assumed trait distributions, as here. Then **calibrate** them to data, for example by fitting each archetype's distribution to the 28 behavioural dimensions, or by fitting a **latent class choice model** to purchase histories so the data reveals the archetypes. Finally, check the synthetic population's joint distributions against held-out real shoppers."
+
+## Step 3: Intentions / shopping missions (2026-10-27)
+- **Context-dependent preferences:** the same person weighs attributes differently depending on the occasion. Here the mission multiplies the taste coefficients, an **interaction between context and preferences**. In choice modelling this is often called **situational** or **context effects**.
+- **Inverse-CDF sampling:** draw u ~ U(0,1) and pick the first category whose cumulative probability exceeds u. Done in a vectorised way, it samples a different categorical distribution for every agent in one line. It's the same trick we'll use to sample products from softmax probabilities.
+- **Fancy indexing:** `table[missions]` turns a small (missions × terms) lookup table into an (agents × terms) matrix with no loop.
+- **i.i.d. vs Markov missions:** each week's mission is drawn independently (**i.i.d.**). A **Markov chain** (a transition matrix between missions) would capture routines, such as a top-up after a big shop. That's a listed limitation.
+- **Interview Q:** *"How would you know the treat weight on price is 0.3 and not 0.7?"*
+  **A:** "Right now it's a hypothesis from the literature. With data, I'd estimate it: fit the choice model with a price × treat-occasion interaction on purchase data where the occasion is known, for example from Watch Humans interviews or basket composition. The size of that interaction coefficient, and its confidence interval, is the answer. It's also a key parameter for the sensitivity analysis."
