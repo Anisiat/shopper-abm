@@ -1,0 +1,12 @@
+# Private interview material
+context/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+
+# Notebooks
+.ipynb_checkpoints/
