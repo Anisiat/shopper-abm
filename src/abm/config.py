@@ -171,6 +171,9 @@ class SimConfig:
     temperature : float
         Softmax temperature. 1.0 is the model; other values are only for
         sensitivity analysis (scale is not separately identified from beta).
+    habit_rate : float
+        Learning rate alpha in (0, 1] for the habit update. Higher means
+        habits form and fade faster.
     """
 
     n_agents: int = 500
@@ -184,8 +187,11 @@ class SimConfig:
     beta: dict[str, float] = field(default_factory=default_beta)
     outside_utility: float = 0.0
     temperature: float = 1.0
+    habit_rate: float = 0.3
 
     def __post_init__(self) -> None:
+        if not 0 < self.habit_rate <= 1:
+            raise ValueError("habit_rate must be in (0, 1]")
         if set(self.beta) != set(WEIGHT_TERMS):
             raise ValueError(f"beta must define exactly {WEIGHT_TERMS}")
         if self.temperature <= 0:
