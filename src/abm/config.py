@@ -124,6 +124,27 @@ def default_mission_weights() -> dict[str, dict[str, float]]:
     }
 
 
+def default_beta() -> dict[str, float]:
+    """Return the taste coefficients, one per utility term (assumed, not calibrated).
+
+    Scaled so that within one shopper, products differ by roughly 1-3 utility
+    units (1 unit is about 2.7x the odds). Price is per GBP and negative.
+
+    Returns
+    -------
+    dict[str, float]
+        ``{term: beta}`` for every term in ``WEIGHT_TERMS``.
+    """
+    return {
+        "price": -3.0,
+        "healthiness": 4.0,
+        "novelty": 2.0,
+        "brand_strength": 2.0,
+        "treat_score": 3.0,
+        "habit": 2.5,
+    }
+
+
 @dataclass(frozen=True)
 class SimConfig:
     """Settings for one simulation run.
@@ -142,6 +163,14 @@ class SimConfig:
         Shopper types to sample from. Shares must sum to 1.
     mission_weights : dict
         ``{mission: {term: weight}}``, see ``default_mission_weights``.
+    beta : dict
+        Taste coefficients ``{term: beta}``, see ``default_beta``.
+    outside_utility : float
+        Utility of buying nothing. Fixed at 0 by convention; product
+        utilities are measured relative to it.
+    temperature : float
+        Softmax temperature. 1.0 is the model; other values are only for
+        sensitivity analysis (scale is not separately identified from beta).
     """
 
     n_agents: int = 500
@@ -152,8 +181,15 @@ class SimConfig:
     mission_weights: dict[str, dict[str, float]] = field(
         default_factory=default_mission_weights
     )
+    beta: dict[str, float] = field(default_factory=default_beta)
+    outside_utility: float = 0.0
+    temperature: float = 1.0
 
     def __post_init__(self) -> None:
+        if set(self.beta) != set(WEIGHT_TERMS):
+            raise ValueError(f"beta must define exactly {WEIGHT_TERMS}")
+        if self.temperature <= 0:
+            raise ValueError("temperature must be positive")
         total = sum(a.share for a in self.archetypes)
         if abs(total - 1.0) > 1e-9:
             raise ValueError(f"Archetype shares must sum to 1, got {total}")
