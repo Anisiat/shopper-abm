@@ -15,7 +15,8 @@ from abm.choice import (
 )
 from abm.config import SimConfig
 from abm.missions import draw_missions, mission_probabilities, mission_weight_matrix
-from abm.products import Product, attribute_matrix, default_catalogue
+from abm.products import ATTRIBUTES, Product, attribute_matrix, default_catalogue
+from abm.scenarios import BASELINE, Scenario, apply_price_changes, health_multiplier
 
 
 @dataclass(frozen=True)
@@ -74,13 +75,17 @@ def update_habit(H: np.ndarray, choice: np.ndarray, alpha: float) -> np.ndarray:
     return H + alpha * (bought - H)   # new array: H itself is not modified
 
 
-def run_simulation(cfg: SimConfig) -> SimResult:
+def run_simulation(cfg: SimConfig, scenario: Scenario = BASELINE) -> SimResult:
     """Run one simulation of ``cfg.n_weeks`` weekly steps.
 
     Parameters
     ----------
     cfg : SimConfig
         All model settings, including the random seed.
+    scenario : Scenario
+        Outside events (price changes, health trend). Defaults to none.
+        The same seed gives the same random draws in every scenario, so
+        runs differ only because of the scenario (common random numbers).
 
     Returns
     -------
@@ -99,14 +104,18 @@ def run_simulation(cfg: SimConfig) -> SimResult:
 
     for week in range(cfg.n_weeks):
         X, available = attribute_matrix(products, week)
+        X = apply_price_changes(scenario, products, week, X)
 
         missions[week] = draw_missions(mission_probs, rng)
         W = mission_weight_matrix(missions[week], cfg)
 
         taste, habit_weight = taste_coefficients(agents, W, cfg)
+        taste[:, ATTRIBUTES.index("healthiness")] *= health_multiplier(scenario, week)
         V = utility(taste, X, H, habit_weight)
         P = choice_probabilities(V, available, cfg)
-        choices[week] = sample_choice(P, rng)
+        chosen = sample_choice(P, rng)
+        shops = rng.random(n) < cfg.category_prob          # category gate
+        choices[week] = np.where(shops, chosen, j)         # j = bought nothing
 
         H = update_habit(H, choices[week], cfg.habit_rate)
 

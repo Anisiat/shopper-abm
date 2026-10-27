@@ -174,6 +174,9 @@ class SimConfig:
     habit_rate : float
         Learning rate alpha in (0, 1] for the habit update. Higher means
         habits form and fade faster.
+    category_prob : float
+        Probability that a shopper buys from this category at all in a given
+        week (the "category gate"). Otherwise they buy nothing.
     """
 
     n_agents: int = 500
@@ -188,8 +191,11 @@ class SimConfig:
     outside_utility: float = 0.0
     temperature: float = 1.0
     habit_rate: float = 0.3
+    category_prob: float = 0.5
 
     def __post_init__(self) -> None:
+        if not 0 <= self.category_prob <= 1:
+            raise ValueError("category_prob must be in [0, 1]")
         if not 0 < self.habit_rate <= 1:
             raise ValueError("habit_rate must be in (0, 1]")
         if set(self.beta) != set(WEIGHT_TERMS):
